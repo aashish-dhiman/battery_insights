@@ -140,13 +140,26 @@ class BatteryInsights {
   Stream<BatteryRunReport> get reports => _reports.stream;
 
   /// On-device totals of the app's battery use, newest day first, for the
-  /// last [BatteryUsageLedger.maxDays] days. Built from closed segments, so
+  /// last [BatteryInsightsConfig.usageDays] days (empty when that is 0).
+  /// Built from closed segments, so
   /// the segment in progress (at most [BatteryInsightsConfig.rollAfter] old
   /// when sampled) is not in it yet.
   List<BatteryDayUsage> get usage => _usage.days;
 
   /// Today's entry of [usage], or null before any segment closed today.
   BatteryDayUsage? get usageToday => _usage.dayOf(_clock());
+
+  /// Resizes the ledger to [BatteryInsightsConfig.usageDays], deleting the
+  /// stored totals when it is 0 and rewriting them when days were dropped.
+  void _applyUsageDays() {
+    final before = _usage.days.length;
+    _usage.maxDays = _config.usageDays;
+    if (_usage.maxDays == 0) {
+      _prefs?.remove(_prefUsage);
+    } else if (_usage.days.length != before) {
+      _prefs?.setString(_prefUsage, jsonEncode(_usage.toJson()));
+    }
+  }
 
   /// Forgets [usage].
   void clearUsage() {
@@ -256,6 +269,7 @@ class BatteryInsights {
               Map<String, dynamic>.from(jsonDecode(rawUsage) as Map));
         } catch (_) {}
       }
+      _applyUsageDays();
       final rawCapacity = prefs.getString(_prefCapacity);
       if (rawCapacity != null) {
         try {
@@ -284,6 +298,7 @@ class BatteryInsights {
       final wasActive = isActive;
       _config = config;
       _prefs?.setString(_prefConfig, jsonEncode(config.toJson()));
+      _applyUsageDays();
       if (wasActive && !isActive) {
         _enqueue(() async {
           _segment = null;
@@ -655,7 +670,7 @@ class BatteryInsights {
       outcome: outcome,
     ));
     if (_records.length > _debugRecordLimit) _records.removeAt(0);
-    if (isActive) {
+    if (isActive && _usage.maxDays > 0) {
       _usage.add(seg, reason);
       _prefs?.setString(_prefUsage, jsonEncode(_usage.toJson()));
     }

@@ -206,6 +206,13 @@ class _BatteryInsightsDebugViewState extends State<BatteryInsightsDebugView> {
       DebugMetricRow.of(_m['min_segment']!, '${c.minSegment.inSeconds} s'),
       DebugMetricRow.of(
           _m['min_sample_gap']!, '${c.minSampleInterval.inSeconds} s'),
+      DebugMetricRow(
+        label: 'Usage history',
+        value: c.usageDays <= 0 ? 'Off' : '${c.usageDays} days',
+        info: 'Days of on-device usage totals kept (usageDays). 0 turns '
+            'them off and deletes what was stored.',
+        caption: 'usageDays',
+      ),
       DebugMetricRow.of(_m['session_counts']!,
           '${snap.sentCount} sent · ${snap.droppedCount} dropped'),
       for (final e in snap.deviceProperties.entries) _param(e.key, e.value),

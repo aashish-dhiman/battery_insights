@@ -263,16 +263,90 @@ void main() {
         insights.setDimension('d', '$i');
         await insights.settled;
       }
-      expect(insights.usage, hasLength(BatteryUsageLedger.maxDays));
+      expect(insights.usage, hasLength(BatteryUsageLedger.defaultDays));
       expect(insights.usage.first.day.isAfter(insights.usage.last.day), isTrue);
 
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString('battery_insights.usage')!;
       await start(prefs: {'battery_insights.usage': raw}, at: now);
-      expect(insights.usage, hasLength(BatteryUsageLedger.maxDays));
+      expect(insights.usage, hasLength(BatteryUsageLedger.defaultDays));
 
       insights.clearUsage();
       expect(insights.usage, isEmpty);
+    });
+
+    var closed = 0;
+    // Each call closes one segment per day: the dimension always changes.
+    Future<void> closeDays(int n) async {
+      for (var i = 0; i < n; i++) {
+        await advance(const Duration(days: 1), drainMah: 1);
+        insights.setDimension('d', '${closed++}');
+        await insights.settled;
+      }
+    }
+
+    test('usageDays sets how many days are kept', () async {
+      await start(config: enabled.copyWith(usageDays: 3));
+      await closeDays(6);
+      expect(insights.usage, hasLength(3));
+
+      // Raising it keeps what is there and lets the ledger grow.
+      insights.configure(enabled.copyWith(usageDays: 30));
+      await closeDays(5);
+      expect(insights.usage, hasLength(8));
+    });
+
+    test('lowering usageDays drops the oldest days at once, and persists',
+        () async {
+      await start();
+      await closeDays(10);
+      final newest = insights.usage.first.day;
+      insights.configure(enabled.copyWith(usageDays: 2));
+      expect(insights.usage, hasLength(2));
+      expect(insights.usage.first.day, newest);
+
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('battery_insights.usage')!;
+      final config = prefs.getString('battery_insights.config')!;
+      // A restart with no config passed follows the persisted one.
+      await start(
+        config: null,
+        prefs: {
+          'battery_insights.usage': raw,
+          'battery_insights.config': config,
+        },
+        at: now,
+      );
+      expect(insights.config.usageDays, 2);
+      expect(insights.usage, hasLength(2));
+    });
+
+    test('usageDays: 0 turns the ledger off and deletes stored totals',
+        () async {
+      await start();
+      await closeDays(3);
+      expect(insights.usage, isNotEmpty);
+
+      insights.configure(enabled.copyWith(usageDays: 0));
+      expect(insights.usage, isEmpty);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('battery_insights.usage'), isNull);
+
+      // Nothing is recorded while off, but events still flow.
+      sent.clear();
+      await closeDays(2);
+      expect(insights.usage, isEmpty);
+      expect(insights.usageToday, isNull);
+      expect(of('battery_segment'), isNotEmpty);
+    });
+
+    test('usageDays is clamped to 0..366', () async {
+      await start(config: enabled.copyWith(usageDays: -5));
+      await closeDays(1);
+      expect(insights.usage, isEmpty);
+      insights.configure(enabled.copyWith(usageDays: 5000));
+      await closeDays(1);
+      expect(insights.usage, hasLength(1));
     });
   });
 
@@ -282,14 +356,20 @@ void main() {
       samplePct: 20,
       flowEvents: false,
       maxDimensions: 8,
+      usageDays: 30,
     );
     final back = BatteryInsightsConfig.fromJson(c.toJson());
     expect(back.toJson(), c.toJson());
-    final junk = BatteryInsightsConfig.fromJson(
-        {'enabled': 'yes', 'maxDimensions': 'x', 'sessionEvents': false});
+    final junk = BatteryInsightsConfig.fromJson({
+      'enabled': 'yes',
+      'maxDimensions': 'x',
+      'sessionEvents': false,
+      'usageDays': '7'
+    });
     expect(junk.enabled, isFalse);
     expect(junk.maxDimensions, 4);
     expect(junk.sessionEvents, isFalse);
+    expect(junk.usageDays, 14);
   });
 
   test('maxDimensions comes from config', () async {

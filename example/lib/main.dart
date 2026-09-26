@@ -166,8 +166,34 @@ class UsageTodayCard extends StatelessWidget {
               children: [
                 Text('This app today',
                     style: Theme.of(context).textTheme.titleMedium),
+                // A user-facing setting: how much history stays on the phone.
+                Row(
+                  children: [
+                    const Expanded(child: Text('Keep battery history')),
+                    DropdownButton<int>(
+                      value: insights.config.usageDays,
+                      items: [
+                        for (final days in {
+                          0,
+                          7,
+                          14,
+                          30,
+                          insights.config.usageDays
+                        })
+                          DropdownMenuItem(
+                            value: days,
+                            child: Text(days == 0 ? 'Off' : '$days days'),
+                          ),
+                      ],
+                      onChanged: (days) => insights
+                          .configure(insights.config.copyWith(usageDays: days)),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 8),
-                if (day == null)
+                if (insights.config.usageDays == 0)
+                  const Text('History is off — nothing is kept on the phone.')
+                else if (day == null)
                   const Text('Collecting… totals grow as segments close.')
                 else ...[
                   Text('Total       ${line(day.total)}'),

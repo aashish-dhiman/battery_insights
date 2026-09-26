@@ -375,7 +375,7 @@ if (report != null) {
         <tr><th>What</th><th>Event</th><th>Answers</th></tr>
         <tr><td><strong>Sessions</strong>: each foreground and each background stretch</td><td><code>battery_session</code></td><td>How much battery does our app use in the foreground and in the background, per user, model and release?</td></tr>
         <tr><td><strong>Segments</strong>: stretches of constant state</td><td><code>battery_segment</code></td><td>What does the screen cost? Does background location hurt? Which state regressed?</td></tr>
-        <tr><td><strong>On-device totals</strong>: 14 days by app state and flow</td><td>none (kept locally)</td><td>An in-app "battery usage" screen, support diagnostics, or your own backend</td></tr>
+        <tr><td><strong>On-device totals</strong>: 14 days by default (configurable), by app state and flow</td><td>none (kept locally)</td><td>An in-app "battery usage" screen, support diagnostics, or your own backend</td></tr>
       </table></div>
 
       <h3>Read today's usage in the app</h3>
@@ -394,7 +394,16 @@ if (report != null) {
     ]);
   },
 )</pre></div>
-      <p class="muted"><code>BatteryInsights.instance.usage</code> has the last 14 days, newest first. Charging time is counted as time but not as drain. Totals come from closed segments, so the segment in progress shows up once it closes.</p>
+      <p class="muted"><code>BatteryInsights.instance.usage</code> has the last <code>usageDays</code> days (14 by default), newest first. Charging time is counted as time but not as drain. Totals come from closed segments, so the segment in progress shows up once it closes.</p>
+
+      <h3>Let users choose how much history is kept</h3>
+      <p><code>usageDays</code> sets how many days of totals stay on the phone, from 0 to 366. Setting it to <code>0</code> turns the ledger off and deletes what was stored. It's persisted with the rest of the config, so you can offer it as an app setting:</p>
+      <div class="code"><span class="lang">dart</span><pre>// e.g. a "Keep battery history" setting: Off / 7 / 30 days
+void setHistoryDays(int days) {
+  final insights = BatteryInsights.instance;
+  insights.configure(insights.config.copyWith(usageDays: days));
+}</pre></div>
+      <p class="muted">Lowering it drops the oldest days at once. Raising it keeps what's there and lets history grow.</p>
 
       <h3>Get every run as a stream</h3>
       <div class="code"><span class="lang">dart</span><pre>BatteryInsights.instance.reports.listen((r) {
@@ -484,6 +493,7 @@ BatteryInsights.instance.configure(BatteryInsightsConfig.fromJson(
         <tr><td><code>flowEvents</code></td><td><code>flowEvents</code></td><td><code>true</code></td><td>Send <code>battery_flow</code></td></tr>
         <tr><td><code>sessionEvents</code></td><td><code>sessionEvents</code></td><td><code>true</code></td><td>Send <code>battery_session</code></td></tr>
         <tr><td><code>maxDimensions</code></td><td><code>maxDimensions</code></td><td><code>4</code></td><td>How many host dimensions can be set at once</td></tr>
+        <tr><td><code>usageDays</code></td><td><code>usageDays</code></td><td><code>14</code></td><td>Days of on-device totals to keep (0–366). <code>0</code> turns them off and deletes stored totals</td></tr>
       </table></div>
       <p class="muted">Missing or mistyped JSON keys fall back to their defaults. Every method is safe to call before <code>init</code>, while disabled, and repeatedly, and none of them throws.</p>
     </section>

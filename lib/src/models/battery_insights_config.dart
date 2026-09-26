@@ -11,6 +11,7 @@ class BatteryInsightsConfig {
     this.flowEvents = true,
     this.sessionEvents = true,
     this.maxDimensions = 4,
+    this.usageDays = 14,
   });
 
   final bool enabled;
@@ -49,6 +50,11 @@ class BatteryInsightsConfig {
   /// parameters; raise it if your analytics backend allows more.
   final int maxDimensions;
 
+  /// Days of on-device usage totals to keep ([BatteryInsights.usage]),
+  /// newest first, up to 366. 0 turns the ledger off and deletes what it
+  /// stored. Lowering it drops the oldest days at once.
+  final int usageDays;
+
   Map<String, Object> toJson() => {
         'enabled': enabled,
         'samplePct': samplePct,
@@ -59,6 +65,7 @@ class BatteryInsightsConfig {
         'flowEvents': flowEvents,
         'sessionEvents': sessionEvents,
         'maxDimensions': maxDimensions,
+        'usageDays': usageDays,
       };
 
   /// Parses a config written by [toJson] — or one from remote config, where
@@ -79,6 +86,7 @@ class BatteryInsightsConfig {
       flowEvents: flag(json['flowEvents'], d.flowEvents),
       sessionEvents: flag(json['sessionEvents'], d.sessionEvents),
       maxDimensions: count(json['maxDimensions'], d.maxDimensions),
+      usageDays: count(json['usageDays'], d.usageDays),
     );
   }
 
@@ -92,6 +100,7 @@ class BatteryInsightsConfig {
     bool? flowEvents,
     bool? sessionEvents,
     int? maxDimensions,
+    int? usageDays,
   }) =>
       BatteryInsightsConfig(
         enabled: enabled ?? this.enabled,
@@ -103,5 +112,6 @@ class BatteryInsightsConfig {
         flowEvents: flowEvents ?? this.flowEvents,
         sessionEvents: sessionEvents ?? this.sessionEvents,
         maxDimensions: maxDimensions ?? this.maxDimensions,
+        usageDays: usageDays ?? this.usageDays,
       );
 }

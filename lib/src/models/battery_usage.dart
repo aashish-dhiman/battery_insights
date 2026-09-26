@@ -107,10 +107,29 @@ class BatteryDayUsage {
 /// Rolling on-device totals of the app's battery use, by day, app state and
 /// flow — what lets an app show "used 142 mAh today" without a backend.
 class BatteryUsageLedger {
-  BatteryUsageLedger([Map<String, BatteryDayUsage>? days]) : _days = {...?days};
+  BatteryUsageLedger(
+      [Map<String, BatteryDayUsage>? days, int maxDays = defaultDays])
+      : _days = {...?days},
+        _maxDays = maxDays {
+    _trim();
+  }
 
-  /// Days kept. Older ones are dropped as new ones start.
-  static const int maxDays = 14;
+  /// Days kept unless configured otherwise
+  /// ([BatteryInsightsConfig.usageDays]).
+  static const int defaultDays = 14;
+
+  /// The most [usageDays] can be set to.
+  static const int maxAllowedDays = 366;
+
+  int _maxDays;
+
+  /// Days kept. Older ones are dropped as new ones start; lowering it drops
+  /// the oldest days at once. 0 keeps nothing.
+  int get maxDays => _maxDays;
+  set maxDays(int value) {
+    _maxDays = value.clamp(0, maxAllowedDays);
+    _trim();
+  }
 
   final Map<String, BatteryDayUsage> _days;
 
@@ -126,6 +145,7 @@ class BatteryUsageLedger {
   /// plug state changed, count as time but not drain: their charge counter
   /// mixes use with what the charger put in.
   void add(BatterySegment seg, String endReason) {
+    if (_maxDays <= 0) return;
     final start = seg.start.at;
     final key = BatteryDayUsage.keyOf(start);
     final day = _days[key] ??=
@@ -147,11 +167,14 @@ class BatteryUsageLedger {
     final flow = seg.dims['flow'] ?? 'none';
     (day.flows[flow] ??= BatteryUsageTotal())._add(seconds, drain);
 
-    if (_days.length > maxDays) {
-      final keys = _days.keys.toList()..sort();
-      for (final k in keys.take(_days.length - maxDays)) {
-        _days.remove(k);
-      }
+    _trim();
+  }
+
+  void _trim() {
+    if (_days.length <= _maxDays) return;
+    final keys = _days.keys.toList()..sort();
+    for (final k in keys.take(_days.length - _maxDays)) {
+      _days.remove(k);
     }
   }
 
@@ -160,13 +183,14 @@ class BatteryUsageLedger {
   Map<String, Object> toJson() =>
       {for (final e in _days.entries) e.key: e.value.toJson()};
 
-  factory BatteryUsageLedger.fromJson(Map<String, dynamic> json) {
+  factory BatteryUsageLedger.fromJson(Map<String, dynamic> json,
+      {int maxDays = defaultDays}) {
     final days = <String, BatteryDayUsage>{};
     for (final e in json.entries) {
       final day = DateTime.tryParse(e.key);
       if (day == null) continue;
       days[e.key] = BatteryDayUsage.fromJson(day, e.value);
     }
-    return BatteryUsageLedger(days);
+    return BatteryUsageLedger(days, maxDays);
   }
 }

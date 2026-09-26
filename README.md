@@ -119,7 +119,7 @@ Once enabled, the whole life of the app is measured with no further code:
 
 - **Sessions** — every foreground stretch and every background stretch becomes a `battery_session` event: how long, how many mAh, the average mA, how hot. This is your "how much battery does our app use" number, for every user.
 - **Segments** — time is split wherever any state changes (flow, foreground/background, charging, screen on/off, power saver, brightness band, network, your dimensions) and each piece becomes a `battery_segment` event. Aggregate them to answer "what does the screen cost?", "does background location hurt?", "did release 4.2 regress?".
-- **On-device totals** — the last 14 days, by app state and by flow, readable in the app:
+- **On-device totals** — the last 14 days by default (set `usageDays`), by app state and by flow, readable in the app:
 
 ```dart
 final today = BatteryInsights.instance.usageToday;
@@ -133,7 +133,19 @@ if (today != null) {
 }
 ```
 
-Useful for an in-app "battery usage" screen, a support page, or your own backend — no analytics needed. Listen to `BatteryInsights.instance.debugChanges` to rebuild when totals change, or to `BatteryInsights.instance.reports` for each finished flow run and session.
+Useful for an in-app "battery usage" screen, a support page, or your own backend — no analytics needed.
+
+**Choose how much history is kept** with `usageDays` (default 14, up to 366). `0` turns the on-device totals off and deletes what was stored. You can set it from remote config, or let your app's users decide in a settings screen:
+
+```dart
+// e.g. a "Keep battery history" setting: Off / 7 / 30 days
+void setHistoryDays(int days) {
+  final insights = BatteryInsights.instance;
+  insights.configure(insights.config.copyWith(usageDays: days));
+}
+```
+
+The choice is persisted like the rest of the config. Lowering it drops the oldest days at once, and raising it lets history grow from what is already kept. Listen to `BatteryInsights.instance.debugChanges` to rebuild when totals change, or to `BatteryInsights.instance.reports` for each finished flow run and session.
 
 **Keep long stretches sampled.** Transitions always read the battery. To also catch plugging in, screen toggles and long idle stretches, call `recordSample()` from callbacks your app already runs — location updates, a heartbeat, a sync. It is throttled to one read per `minSampleInterval` (60 s), so calling it often is fine:
 
@@ -191,8 +203,9 @@ BatteryInsights.instance.configure(BatteryInsightsConfig.fromJson(
 | `flowEvents` | `true` | Send `battery_flow` |
 | `sessionEvents` | `true` | Send `battery_session` |
 | `maxDimensions` | `4` | Host dimensions allowed at once (4 keeps segments within Firebase's 25 params) |
+| `usageDays` | `14` | Days of on-device totals to keep (0–366). `0` turns them off and deletes stored totals |
 
-JSON keys: `enabled`, `samplePct`, `rollAfterS`, `minSegmentS`, `minSampleIntervalS`, `segmentEvents`, `flowEvents`, `sessionEvents`, `maxDimensions`. Missing or mistyped keys fall back to defaults.
+JSON keys: `enabled`, `samplePct`, `rollAfterS`, `minSegmentS`, `minSampleIntervalS`, `segmentEvents`, `flowEvents`, `sessionEvents`, `maxDimensions`, `usageDays`. Missing or mistyped keys fall back to defaults.
 
 Every method is safe to call before `init`, while disabled, and repeatedly. None throws.
 
