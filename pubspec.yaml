@@ -1,6 +1,6 @@
 name: battery_insights
 description: Measure real battery drain of your Flutter app on Android — per flow (checkout, camera, calls) and for every user across foreground and background — with no drain of its own.
-version: 0.1.0
+version: 0.1.1
 homepage: https://aashish-dhiman.github.io/battery_insights/
 repository: https://github.com/aashish-dhiman/battery_insights
 issue_tracker: https://github.com/aashish-dhiman/battery_insights/issues
