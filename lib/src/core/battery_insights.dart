@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../debug/battery_debug_snapshot.dart';
+import '../models/battery_health.dart';
 import '../models/battery_insights_config.dart';
 import '../models/battery_reading.dart';
 import '../models/battery_run_report.dart';
@@ -159,6 +160,26 @@ class BatteryInsights {
     } else if (_usage.days.length != before) {
       _prefs?.setString(_prefUsage, jsonEncode(_usage.toJson()));
     }
+  }
+
+  /// This phone's battery condition: full-charge capacity worked out from its
+  /// own readings, design capacity, health %, cycle count and Android's
+  /// health status.
+  ///
+  /// The capacity estimate builds up from readings the package takes while
+  /// reporting is active (see [BatteryHealth.capacityMah]) and is kept across
+  /// restarts, so it is usually known within a day or two of normal use. The
+  /// other fields come from the most recent reading — including a
+  /// [probeNow], which you can call to fill them in without reporting.
+  BatteryHealth get batteryHealth {
+    final r = _latest;
+    return BatteryHealth(
+      capacityMah: _capacity.capacityMah,
+      designMah: r?.designCapacityMah,
+      cycleCount: r?.cycleCount,
+      status: r?.health,
+      samples: _capacity.sampleCount,
+    );
   }
 
   /// Forgets [usage].

@@ -6,12 +6,13 @@
 
 **Find out what your Flutter app really costs in battery, on your users' real phones.**
 
-`battery_insights` measures battery drain in mAh from the phone's fuel gauge and attributes it to what the app was doing. It covers two jobs:
+`battery_insights` measures battery drain in mAh from the phone's fuel gauge and attributes it to what the app was doing. It covers three jobs:
 
 | | What you get | How |
 |---|---|---|
 | **1. Flow-wise tracking** | "Checkout costs 4.2 mAh per visit; the video call 310 mA" | `startFlow()` / `finish()`, `BatteryFlowScope`, or `BatteryFlowRouteObserver` → one `battery_flow` event per visit |
 | **2. Every-user tracking** | "Our app drains 3 %/h in the foreground and 0.4 %/h in the background, per model, per release" | Automatic: `battery_session` events for every foreground/background stretch, `battery_segment` events split by flow, charging, screen, network…, and on-device daily totals |
+| **3. Battery health** | "This phone's battery holds 82 % of its original charge, after 312 cycles" | `BatteryInsights.instance.batteryHealth`: full-charge capacity worked out from the phone's own readings, compared with its design capacity |
 
 It adds **no drain of its own**: no timers, no wake locks, no battery listeners. It reads only when your app is already awake.
 
@@ -25,6 +26,7 @@ It adds **no drain of its own**: no timers, no wake locks, no battery listeners.
 - [Quick start](#quick-start)
 - [1. Flow-wise tracking](#1-flow-wise-tracking)
 - [2. Every-user tracking](#2-every-user-tracking)
+- [3. Battery health](#3-battery-health)
 - [Sending events to analytics](#sending-events-to-analytics)
 - [Configuration & remote rollout](#configuration--remote-rollout)
 - [Event reference](#event-reference)
@@ -156,6 +158,33 @@ locationStream.listen((pos) {
 });
 ```
 
+## 3. Battery health
+
+Android doesn't give apps the battery's health. The package works it out from the phone's own charge readings as it's used:
+
+```dart
+final h = BatteryInsights.instance.batteryHealth;
+
+h.capacityMah;  // what a full charge holds today, e.g. 4100 mAh (worked out)
+h.designMah;    // factory-rated capacity, e.g. 5000 mAh (from Android)
+h.healthPct;    // capacity ÷ design × 100, e.g. 82.0
+h.isWorn();     // true under 80 % (pass threshold: to change)
+h.cycleCount;   // charge cycles (Android 14+)
+h.status;       // Android's verdict: good, overheat, dead, …
+h.samples;      // estimates the capacity rests on
+```
+
+**How the capacity is worked out.** Each reading gives an estimate of charge ÷ battery %. One estimate jitters by several percent, so the package keeps only the cleanest ones — on battery, at 50 % or above, one per 1 % step — and reports the **median of the last 25**. It needs 3 before it answers (usually within a day of normal use), remembers them across restarts, and follows the battery as it wears or is replaced.
+
+Good to know:
+
+- **Estimates build up only while reporting is active** (`enabled: true` and in the `samplePct` cohort). Call `probeNow()` to fill in the Android-reported fields (design, cycles, status) without reporting.
+- **Design capacity** comes from a hidden Android setting. A few phones don't expose it; there `healthPct` is null, and you can compare `capacityMah` with other phones of the same model instead.
+- **A few percent over 100 %** is normal on new batteries and on phones whose displayed battery % is rescaled by the manufacturer. Under about 80 % is a worn battery.
+- The same values reach your analytics as device properties through `deviceSink` (see [below](#device-properties-devicesink)).
+
+Use it to answer "is it our app, or a worn-out battery?" in support tickets, to show users their battery's condition, or to segment drain dashboards by battery wear.
+
 ## Sending events to analytics
 
 The sink receives `(eventName, params)`. Params are flat `String`/`num` maps built to fit Firebase Analytics' limits (≤ 25 params, ≤ 40-char names), so they drop into any SDK.
@@ -265,7 +294,7 @@ Sent once per process, and again only when they change.
 | `battery_cycle_count` | Charge cycles | Android 14+ |
 | `battery_health` | `good`, `overheat`, `dead`, `over_voltage`, `failure`, `cold` | All |
 
-Battery wear = `battery_capacity_mah / battery_design_mah`.
+Battery wear = `battery_capacity_mah / battery_design_mah` — the same `healthPct` that [`batteryHealth`](#3-battery-health) gives in the app.
 
 ## Debug tools
 
@@ -303,7 +332,7 @@ Both refresh every 5 s while visible, with a display-only read that never touche
 - **External activities.** When a flow hands off to the system camera or a picker, your app goes to the background: that time is `app_state = bg` within the flow.
 - **Process death.** An open segment is persisted and reported at the next launch (`end_reason = process_death`). Open flow runs and sessions are not.
 - **Thermal.** Android exposes no CPU/skin temperature to apps; thermal status/headroom need a thermal HAL, which some devices lack. Battery temperature is always available.
-- **Capacity** is estimated (charge ÷ level, median of 25 clean readings), since apps cannot read the gauge's full-charge value.
+- **Capacity** is estimated (charge ÷ level, median of 25 clean readings), since apps cannot read the gauge's full-charge value. Expect it within a few percent of the phone's own figure — consistently, so comparisons within a model hold. Cycle count is Android's own figure (Android 14+), not estimated.
 
 ## Platform support
 

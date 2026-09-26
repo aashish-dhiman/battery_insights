@@ -111,7 +111,7 @@
   :root[data-theme="dark"] .btn { color: #06201c; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn { color: #06201c; } }
 
-  .motives { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 28px 0 0; }
+  .motives { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; margin: 28px 0 0; }
   .card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
     padding: 20px; box-shadow: var(--shadow);
@@ -224,6 +224,7 @@
     <h4>Tracking</h4>
     <a href="#flows">1 · Flow-wise</a>
     <a href="#users">2 · Every user</a>
+    <a href="#health">3 · Battery health</a>
     <a href="#dimensions">Your own dimensions</a>
     <a href="#sampling">Keeping it sampled</a>
     <h4>Data</h4>
@@ -263,6 +264,12 @@
           <h3>Every-user tracking</h3>
           <p>Measure the app's whole life automatically: every foreground and background session for every user, split by state, with daily totals kept on the device.</p>
           <div class="q">“Release 4.2 drains 3.1 %/h in the foreground and 0.4 %/h in the background, up from 2.6.”</div>
+        </div>
+        <div class="card">
+          <div class="num">Bonus</div>
+          <h3>Battery health</h3>
+          <p>Android doesn't give apps battery health, so the package works it out from each phone's own charge readings and compares it with the factory capacity.</p>
+          <div class="q">“This battery holds 82 % of its original charge, after 312 cycles.”</div>
         </div>
       </div>
     </div>
@@ -412,6 +419,39 @@ void setHistoryDays(int days) {
 });</pre></div>
     </section>
 
+    <section id="health">
+      <h2>3 · Battery health</h2>
+      <p>Android doesn't give apps the battery's health. The package works it out from the phone's own charge readings as it's used, and pairs it with what Android does report:</p>
+      <div class="code"><span class="lang">dart</span><pre>final h = BatteryInsights.instance.batteryHealth;
+
+h.capacityMah;  // what a full charge holds today, e.g. 4100 mAh (worked out)
+h.designMah;    // factory-rated capacity, e.g. 5000 mAh (from Android)
+h.healthPct;    // capacity / design x 100, e.g. 82.0
+h.isWorn();     // true under 80 % (pass threshold: to change)
+h.cycleCount;   // charge cycles (Android 14+)
+h.status;       // Android's verdict: good, overheat, dead, ...
+h.samples;      // estimates the capacity rests on</pre></div>
+
+      <div class="table-wrap"><table>
+        <tr><th>Field</th><th>Source</th><th>Available on</th></tr>
+        <tr><td><code>capacityMah</code></td><td><strong>Worked out by the package</strong> from this phone's readings</td><td>Phones with a charge counter (most)</td></tr>
+        <tr><td><code>designMah</code></td><td>Android (OEM power profile)</td><td>Most phones</td></tr>
+        <tr><td><code>healthPct</code></td><td>capacity ÷ design</td><td>Where both are known</td></tr>
+        <tr><td><code>cycleCount</code></td><td>Android, as reported</td><td>Android 14+</td></tr>
+        <tr><td><code>status</code></td><td>Android, as reported</td><td>All phones</td></tr>
+      </table></div>
+
+      <h3>How the capacity is worked out</h3>
+      <p>Each reading gives an estimate of charge ÷ battery %. A single estimate jitters by several percent, so the package only keeps the cleanest ones: taken on battery, at 50 % or above, and one per 1 % step. It reports the <strong>median of the last 25</strong>. It needs 3 before it gives an answer, which usually takes about a day of normal use. The estimates are kept across restarts, so the number follows the battery as it wears or is replaced.</p>
+      <div class="callout"><p>Estimates only build up while reporting is active. To fill in the fields Android reports (design capacity, cycles, status) without reporting, call <code>probeNow()</code>.</p></div>
+      <ul>
+        <li><strong>No design capacity?</strong> A few phones don't expose it. There <code>healthPct</code> is null, so compare <code>capacityMah</code> with other phones of the same model instead.</li>
+        <li><strong>Slightly over 100 %</strong> is normal for new batteries and for phones whose manufacturer rescales the displayed battery %. Under about 80 % means the battery is worn.</li>
+        <li><strong>In analytics</strong>, the same values arrive as device properties through <code>deviceSink</code>.</li>
+      </ul>
+      <p class="muted">Use it to answer "is it our app, or a worn-out battery?" in support tickets, to show users their battery's condition, or to split drain dashboards by battery wear.</p>
+    </section>
+
     <section id="dimensions">
       <h2>Your own dimensions</h2>
       <p>For state that changes <em>inside</em> a flow, such as the camera, a download, GPS tracking or a video playing, set a dimension where the state really changes:</p>
@@ -536,6 +576,7 @@ BatteryInsights.instance.configure(BatteryInsightsConfig.fromJson(
       </table></div>
 
       <h3>Device properties (<code>deviceSink</code>)</h3>
+      <p class="muted">The same values <a href="#health"><code>batteryHealth</code></a> gives in the app, sent once per process and again only when they change.</p>
       <div class="table-wrap"><table>
         <tr><th>Property</th><th>Meaning</th><th>Availability</th></tr>
         <tr><td><code>battery_capacity_mah</code></td><td>Full-charge capacity today (stable median, rounded to 50 mAh)</td><td>Devices with a charge counter</td></tr>

@@ -97,6 +97,8 @@ class HomePage extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: [
           const UsageTodayCard(),
+          const SizedBox(height: 12),
+          const BatteryHealthCard(),
           const SizedBox(height: 16),
           Text('Flow-wise tracking',
               style: Theme.of(context).textTheme.titleMedium),
@@ -212,6 +214,45 @@ class UsageTodayCard extends StatelessWidget {
   }
 
   static String _mins(Duration d) => '${d.inMinutes} min';
+}
+
+/// The phone's battery condition, worked out from its own readings.
+class BatteryHealthCard extends StatelessWidget {
+  const BatteryHealthCard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final insights = BatteryInsights.instance;
+    return ListenableBuilder(
+      listenable: insights.debugChanges,
+      builder: (context, _) {
+        final h = insights.batteryHealth;
+        final pct = h.healthPct;
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Battery health',
+                    style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                Text(pct == null
+                    ? 'Health: learning… (${h.samples}/'
+                        '${BatteryHealth.minSamples} estimates)'
+                    : 'Health: ${pct.toStringAsFixed(0)} %'
+                        '${h.isWorn() ? ' — worn' : ''}'),
+                Text('Holds today: ${h.capacityMah?.round() ?? '—'} mAh'
+                    ' of ${h.designMah?.round() ?? '—'} mAh design'),
+                Text('Cycles: ${h.cycleCount ?? '— (Android 14+)'}'
+                    ' · Status: ${h.status ?? '—'}'),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class CheckoutPage extends StatelessWidget {
