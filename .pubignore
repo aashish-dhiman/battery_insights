@@ -1,0 +1,13 @@
+docs/
+.github/
+build/
+.dart_tool/
+pubspec.lock
+.idea/
+*.iml
+.DS_Store
+.gradle/
+local.properties
+example/build/
+example/.dart_tool/
+example/pubspec.lock

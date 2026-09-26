@@ -1,0 +1,25 @@
+# Publishes to pub.dev when a tag like v0.1.0 is pushed.
+# One-time setup on pub.dev: package Admin → "Automated publishing" →
+# enable GitHub Actions, repository aashish-dhiman/battery_insights,
+# tag pattern v{{version}}.
+name: Publish to pub.dev
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+
+jobs:
+  publish:
+    permissions:
+      id-token: write # OIDC token for pub.dev
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter test
+      - run: flutter pub publish --force

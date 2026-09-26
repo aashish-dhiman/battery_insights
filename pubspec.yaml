@@ -1,0 +1,34 @@
+name: battery_insights
+description: Measure real battery drain of your Flutter app on Android — per flow (checkout, camera, calls) and for every user across foreground and background — with no drain of its own.
+version: 0.1.0
+homepage: https://aashish-dhiman.github.io/battery_insights/
+repository: https://github.com/aashish-dhiman/battery_insights
+issue_tracker: https://github.com/aashish-dhiman/battery_insights/issues
+documentation: https://aashish-dhiman.github.io/battery_insights/
+topics:
+  - battery
+  - performance
+  - analytics
+  - monitoring
+  - android
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: ^2.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: io.github.aashishdhiman.battery_insights
+        pluginClass: BatteryInsightsPlugin

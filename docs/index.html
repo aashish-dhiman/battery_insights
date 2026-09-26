@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>battery_insights · Integration guide</title>
+<meta name="description" content="Measure real battery drain of your Flutter app on Android — per flow and for every user — with no drain of its own.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='9' width='23' height='14' rx='3' fill='none' stroke='%2314b8a6' stroke-width='2.5'/%3E%3Crect x='27' y='13' width='3' height='6' rx='1' fill='%2314b8a6'/%3E%3Crect x='6' y='12' width='11' height='8' rx='1' fill='%2314b8a6'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fbfbf9;
+    --surface: #ffffff;
+    --surface-2: #f3f4f1;
+    --text: #17201d;
+    --muted: #5b6763;
+    --border: #e3e6e1;
+    --accent: #0d9488;
+    --accent-2: #0f766e;
+    --accent-soft: #ccfbf1;
+    --warn-soft: #fef3c7;
+    --code-bg: #0f1a17;
+    --code-text: #e6efe9;
+    --shadow: 0 1px 2px rgba(16,24,20,.04), 0 8px 24px rgba(16,24,20,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b1210; --surface: #111a17; --surface-2: #16211d; --text: #e6efe9;
+      --muted: #97a7a1; --border: #22302b; --accent: #2dd4bf; --accent-2: #5eead4;
+      --accent-soft: #123a35; --warn-soft: #3a2f10; --code-bg: #070d0b; --code-text: #e6efe9;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b1210; --surface: #111a17; --surface-2: #16211d; --text: #e6efe9;
+    --muted: #97a7a1; --border: #22302b; --accent: #2dd4bf; --accent-2: #5eead4;
+    --accent-soft: #123a35; --warn-soft: #3a2f10; --code-bg: #070d0b; --code-text: #e6efe9;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.65 Inter, system-ui, -apple-system, Segoe UI, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-ligatures: none; }
+  :not(pre) > code {
+    background: var(--surface-2); border: 1px solid var(--border);
+    padding: .08em .38em; border-radius: 6px; font-size: .88em;
+  }
+
+  /* Top bar */
+  header.top {
+    position: sticky; top: 0; z-index: 20; height: 60px;
+    display: flex; align-items: center; gap: 16px; padding: 0 20px;
+    background: color-mix(in srgb, var(--bg) 85%, transparent);
+    backdrop-filter: blur(10px); border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--text); }
+  .brand:hover { text-decoration: none; }
+  .brand svg { width: 28px; height: 28px; }
+  .top .spacer { flex: 1; }
+  .top nav { display: flex; gap: 6px; align-items: center; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px;
+    border: 1px solid var(--border); border-radius: 999px; color: var(--text);
+    font-size: 14px; font-weight: 500; background: var(--surface);
+  }
+  .pill:hover { border-color: var(--accent); text-decoration: none; }
+  .pill svg { width: 16px; height: 16px; }
+  #theme { cursor: pointer; font: inherit; }
+  #menu { display: none; cursor: pointer; font: inherit; }
+
+  /* Layout */
+  .wrap { display: grid; grid-template-columns: 240px minmax(0, 1fr); max-width: 1180px; margin: 0 auto; }
+  aside.side {
+    position: sticky; top: 60px; align-self: start; height: calc(100vh - 60px);
+    overflow-y: auto; padding: 28px 12px 28px 20px; border-right: 1px solid var(--border);
+  }
+  aside.side h4 { margin: 18px 10px 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  aside.side h4:first-child { margin-top: 0; }
+  aside.side a {
+    display: block; padding: 5px 10px; border-radius: 8px; color: var(--muted); font-size: 14px;
+  }
+  aside.side a:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
+  aside.side a.active { background: var(--accent-soft); color: var(--accent-2); font-weight: 600; }
+  main { padding: 36px 48px 96px; min-width: 0; }
+
+  /* Hero */
+  .hero { padding: 12px 0 28px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+  .eyebrow { display: inline-block; font-size: 13px; font-weight: 600; color: var(--accent-2);
+    background: var(--accent-soft); padding: 4px 10px; border-radius: 999px; }
+  .hero h1 { font-size: clamp(32px, 5vw, 48px); line-height: 1.1; letter-spacing: -.02em; margin: 16px 0 12px; font-weight: 800; }
+  .hero p.lead { font-size: 19px; color: var(--muted); max-width: 680px; margin: 0 0 22px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .install {
+    display: inline-flex; align-items: center; gap: 12px; background: var(--code-bg); color: var(--code-text);
+    border-radius: 10px; padding: 10px 10px 10px 16px; font-family: "JetBrains Mono", monospace; font-size: 14px;
+  }
+  .install .copy { position: static; flex: none; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 10px;
+    background: var(--accent); color: #fff; font-weight: 600; font-size: 15px;
+  }
+  .btn:hover { background: var(--accent-2); text-decoration: none; }
+  :root[data-theme="dark"] .btn { color: #06201c; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn { color: #06201c; } }
+
+  .motives { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 28px 0 0; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px; box-shadow: var(--shadow);
+  }
+  .card .num { font-size: 12px; font-weight: 700; color: var(--accent-2); letter-spacing: .06em; text-transform: uppercase; }
+  .card h3 { margin: 6px 0 6px; font-size: 18px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .card .q { margin-top: 12px; font-size: 14px; background: var(--surface-2); padding: 10px 12px; border-radius: 10px; color: var(--text); }
+
+  /* Content */
+  section { padding-top: 36px; }
+  h2 { font-size: 28px; letter-spacing: -.01em; margin: 0 0 12px; }
+  h3 { font-size: 19px; margin: 28px 0 8px; }
+  p, li { color: var(--text); }
+  .muted { color: var(--muted); }
+  .step { display: flex; gap: 14px; margin: 18px 0; }
+  .step .n {
+    flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--accent-soft); color: var(--accent-2); font-weight: 700; font-size: 14px; margin-top: 2px;
+  }
+  .step > div { min-width: 0; flex: 1; }
+  .step h3 { margin-top: 2px; }
+
+  .code { position: relative; margin: 12px 0 18px; }
+  .code .lang {
+    position: absolute; top: 8px; left: 14px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+    color: #7f938b; font-family: Inter, sans-serif;
+  }
+  pre {
+    margin: 0; background: var(--code-bg); color: var(--code-text); border-radius: 12px;
+    padding: 34px 16px 16px; overflow-x: auto; font-size: 13.5px; line-height: 1.6;
+  }
+  .copy {
+    position: absolute; top: 6px; right: 6px; border: 0; cursor: pointer; font: 500 12px Inter, sans-serif;
+    background: rgba(255,255,255,.08); color: #cfe0d8; padding: 5px 10px; border-radius: 7px;
+  }
+  .copy:hover { background: rgba(255,255,255,.16); }
+  .tok-k { color: #f0abfc; } .tok-s { color: #86efac; } .tok-c { color: #7f938b; font-style: italic; }
+  .tok-n { color: #fcd34d; } .tok-t { color: #7dd3fc; }
+
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-top: 14px; flex-wrap: wrap; }
+  .tabs button {
+    border: 0; background: none; padding: 9px 14px; cursor: pointer; font: 500 14px Inter, sans-serif;
+    color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tabs button[aria-selected="true"] { color: var(--accent-2); border-bottom-color: var(--accent); }
+  .panel[hidden] { display: none; }
+
+  .callout {
+    border: 1px solid var(--border); border-left: 4px solid var(--accent); background: var(--surface);
+    border-radius: 10px; padding: 12px 16px; margin: 16px 0; font-size: 15px;
+  }
+  .callout.warn { border-left-color: #d97706; background: var(--warn-soft); }
+  .callout p { margin: 0; }
+
+  .table-wrap { overflow-x: auto; margin: 12px 0 20px; border: 1px solid var(--border); border-radius: 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--surface); }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--surface-2); font-weight: 600; font-size: 13px; }
+  tr:last-child td { border-bottom: 0; }
+  td code { white-space: nowrap; }
+
+  /* Diagram */
+  .timeline { margin: 18px 0 8px; overflow-x: auto; }
+  .timeline svg { width: 100%; min-width: 640px; height: auto; display: block; }
+  .tl-label { font: 600 12px Inter, sans-serif; fill: var(--muted); }
+  .tl-text { font: 500 11.5px Inter, sans-serif; fill: var(--text); }
+
+  footer { border-top: 1px solid var(--border); margin-top: 56px; padding-top: 20px; color: var(--muted); font-size: 14px; }
+
+  @media (max-width: 900px) {
+    .wrap { grid-template-columns: 1fr; }
+    aside.side {
+      display: none; position: fixed; top: 60px; left: 0; right: 0; bottom: 0; height: auto;
+      background: var(--bg); z-index: 15; border-right: 0;
+    }
+    aside.side.open { display: block; }
+    #menu { display: inline-flex; }
+    main { padding: 24px 16px 72px; }
+    .motives { grid-template-columns: 1fr; }
+    .top nav .hide-sm { display: none; }
+    .install { font-size: 12.5px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <button class="pill" id="menu" aria-label="Menu">☰</button>
+  <a class="brand" href="#top">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="9" width="23" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--accent)"/><rect x="27" y="13" width="3" height="6" rx="1" fill="var(--accent)"/><rect x="6" y="12" width="11" height="8" rx="1" fill="var(--accent)"/></svg>
+    battery_insights
+  </a>
+  <span class="spacer"></span>
+  <nav>
+    <a class="pill hide-sm" href="https://pub.dev/packages/battery_insights">pub.dev</a>
+    <a class="pill" href="https://github.com/aashish-dhiman/battery_insights">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      <span class="hide-sm">GitHub</span>
+    </a>
+    <button class="pill" id="theme" aria-label="Toggle theme">◐</button>
+  </nav>
+</header>
+
+<div class="wrap">
+  <aside class="side" id="side">
+    <h4>Start</h4>
+    <a href="#top">Overview</a>
+    <a href="#install">Install &amp; initialise</a>
+    <h4>Tracking</h4>
+    <a href="#flows">1 · Flow-wise</a>
+    <a href="#users">2 · Every user</a>
+    <a href="#dimensions">Your own dimensions</a>
+    <a href="#sampling">Keeping it sampled</a>
+    <h4>Data</h4>
+    <a href="#analytics">Sending to analytics</a>
+    <a href="#config">Config &amp; rollout</a>
+    <a href="#events">Event reference</a>
+    <a href="#bigquery">BigQuery &amp; dashboards</a>
+    <h4>More</h4>
+    <a href="#debug">Debug tools</a>
+    <a href="#how">How it works</a>
+    <a href="#limits">Accuracy &amp; limits</a>
+    <a href="#checklist">Integration checklist</a>
+  </aside>
+
+  <main id="top">
+    <div class="hero">
+      <span class="eyebrow">Flutter · Android · MIT</span>
+      <h1>See what your app costs in battery, on real phones.</h1>
+      <p class="lead">
+        <code>battery_insights</code> reads the phone's fuel gauge and attributes every mAh to what your app was doing.
+        It uses no timers, wake locks or listeners, so measuring doesn't drain the battery itself.
+      </p>
+      <div class="cta">
+        <span class="install"><span>flutter pub add battery_insights</span><button class="copy" data-copy="flutter pub add battery_insights">Copy</button></span>
+        <a class="btn" href="#install">Get started →</a>
+      </div>
+
+      <div class="motives">
+        <div class="card">
+          <div class="num">Motive 1</div>
+          <h3>Flow-wise tracking</h3>
+          <p>Measure the cost of each visit to checkout, the camera, a video call or a sync job, and get the number back in code.</p>
+          <div class="q">“A checkout visit costs a median 4.2 mAh; the scan flow draws 310 mA.”</div>
+        </div>
+        <div class="card">
+          <div class="num">Motive 2</div>
+          <h3>Every-user tracking</h3>
+          <p>Measure the app's whole life automatically: every foreground and background session for every user, split by state, with daily totals kept on the device.</p>
+          <div class="q">“Release 4.2 drains 3.1 %/h in the foreground and 0.4 %/h in the background, up from 2.6.”</div>
+        </div>
+      </div>
+    </div>
+
+    <section id="install">
+      <h2>Install &amp; initialise</h2>
+
+      <div class="step"><div class="n">1</div><div>
+        <h3>Add the package</h3>
+        <div class="code"><span class="lang">shell</span><pre data-lang="sh">flutter pub add battery_insights</pre></div>
+        <p class="muted">You don't need to request any permissions. The plugin declares only <code>ACCESS_NETWORK_STATE</code>, a normal permission granted at install, so segments can be tagged <code>wifi</code> or <code>cell</code>. Requires Android API 21+.</p>
+      </div></div>
+
+      <div class="step"><div class="n">2</div><div>
+        <h3>Initialise once at startup</h3>
+        <div class="code"><span class="lang">dart</span><pre>import 'package:battery_insights/battery_insights.dart';
+
+Future&lt;void&gt; main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await BatteryInsights.instance.init(
+    // Where events go: your analytics SDK (see "Sending to analytics").
+    sink: (name, params) =&gt; analytics.logEvent(name: name, parameters: params),
+    // Reporting is off by default. Turn it on here, or later from remote config.
+    config: const BatteryInsightsConfig(enabled: true),
+  );
+
+  runApp(const MyApp());
+}</pre></div>
+        <div class="callout"><p>That's all you need for <strong>every-user tracking</strong>: sessions, segments and daily totals start straight away. The next step adds flows.</p></div>
+      </div></div>
+
+      <div class="step"><div class="n">3</div><div>
+        <h3>Mark your flows</h3>
+        <p>Choose whichever style below fits each flow, then check on a real device with the <a href="#debug">debug view</a>.</p>
+      </div></div>
+    </section>
+
+    <section id="flows">
+      <h2>1 · Flow-wise tracking</h2>
+      <p>A <em>flow</em> is anything whose battery cost you want to know: a screen, a feature or a background job. There are three ways to mark one, and you can mix them in the same app.</p>
+
+      <div class="tabs" role="tablist" data-tabs="flowstyle">
+        <button role="tab" aria-selected="true" data-tab="code">In code</button>
+        <button role="tab" aria-selected="false" data-tab="route">By route</button>
+        <button role="tab" aria-selected="false" data-tab="widget">By widget</button>
+      </div>
+      <div class="panel" data-panel="code">
+        <p>Use this when you want the number back, for example to log it, assert it in a benchmark or show it in a dev menu.</p>
+        <div class="code"><span class="lang">dart</span><pre>final run = BatteryInsights.instance.startFlow('video_call');
+await callController.runUntilHangUp();
+final report = await run.finish();   // BatteryRunReport?
+
+if (report != null) {
+  debugPrint('video_call: ${report.drainMah} mAh in ${report.duration}, '
+      '${report.avgMa} mA avg, max ${report.maxTempC} °C');
+}</pre></div>
+        <p class="muted"><code>finish()</code> returns <code>null</code> when reporting is off or the device gave no reading (for example on iOS), so it's safe to call from shared code. You can call it more than once; later calls return the same report.</p>
+      </div>
+      <div class="panel" data-panel="route" hidden>
+        <p>Map route names to flow names once, in one place.</p>
+        <div class="code"><span class="lang">dart</span><pre>MaterialApp(
+  navigatorObservers: [
+    BatteryFlowRouteObserver(
+      flowForRoute: (route) =&gt; switch (route.settings.name) {
+        '/checkout' =&gt; 'checkout',
+        '/scan' =&gt; 'scan',
+        _ =&gt; null,   // not a flow: attribution stays with what's underneath
+      },
+    ),
+  ],
+);</pre></div>
+        <p class="muted">Works with <code>go_router</code> and <code>auto_route</code> too: add the observer to their <code>observers</code> list and map on <code>route.settings.name</code>.</p>
+      </div>
+      <div class="panel" data-panel="widget" hidden>
+        <p>Use this for tabs, bottom sheets, drawers or anything else that isn't a route. The flow is measured while the widget is mounted.</p>
+        <div class="code"><span class="lang">dart</span><pre>BatteryFlowScope(
+  flow: 'map_tab',
+  child: MapTab(),
+)</pre></div>
+      </div>
+
+      <h3>Flows nest</h3>
+      <p>If <code>payment</code> opens inside <code>checkout</code>, segments are attributed to <code>payment</code> until it closes and then go back to <code>checkout</code>. The <code>checkout</code> run still covers the whole visit, including <code>payment</code>.</p>
+      <div class="timeline" aria-label="Nested flows timeline">
+        <svg viewBox="0 0 720 150" role="img">
+          <text class="tl-label" x="0" y="22">battery_flow</text>
+          <rect x="110" y="8" width="520" height="22" rx="6" fill="var(--accent)" opacity=".22" stroke="var(--accent)"/>
+          <text class="tl-text" x="120" y="24">checkout · 4.2 mAh (whole visit)</text>
+          <rect x="300" y="36" width="180" height="22" rx="6" fill="var(--accent)" opacity=".4" stroke="var(--accent)"/>
+          <text class="tl-text" x="310" y="52">payment · 1.8 mAh</text>
+          <text class="tl-label" x="0" y="78">battery_segment</text>
+          <g>
+            <rect x="0" y="86" width="108" height="22" rx="5" fill="var(--surface-2)" stroke="var(--border)"/><text class="tl-text" x="10" y="102">none</text>
+            <rect x="110" y="86" width="188" height="22" rx="5" fill="var(--surface-2)" stroke="var(--border)"/><text class="tl-text" x="120" y="102">checkout</text>
+            <rect x="300" y="86" width="90" height="22" rx="5" fill="var(--surface-2)" stroke="var(--border)"/><text class="tl-text" x="306" y="102">payment</text>
+            <rect x="392" y="86" width="88" height="22" rx="5" fill="var(--accent-soft)" stroke="var(--accent)"/><text class="tl-text" x="398" y="102">payment+cam</text>
+            <rect x="482" y="86" width="148" height="22" rx="5" fill="var(--surface-2)" stroke="var(--border)"/><text class="tl-text" x="492" y="102">checkout</text>
+            <rect x="632" y="86" width="88" height="22" rx="5" fill="var(--surface-2)" stroke="var(--border)"/><text class="tl-text" x="642" y="102">none</text>
+          </g>
+          <text class="tl-label" x="0" y="140">A flow run is one row per visit. Segments split the same time wherever anything changes, such as the camera turning on.</text>
+        </svg>
+      </div>
+    </section>
+
+    <section id="users">
+      <h2>2 · Every-user tracking</h2>
+      <p>Once reporting is on, the whole life of the app is measured without any further code:</p>
+      <div class="table-wrap"><table>
+        <tr><th>What</th><th>Event</th><th>Answers</th></tr>
+        <tr><td><strong>Sessions</strong>: each foreground and each background stretch</td><td><code>battery_session</code></td><td>How much battery does our app use in the foreground and in the background, per user, model and release?</td></tr>
+        <tr><td><strong>Segments</strong>: stretches of constant state</td><td><code>battery_segment</code></td><td>What does the screen cost? Does background location hurt? Which state regressed?</td></tr>
+        <tr><td><strong>On-device totals</strong>: 14 days by app state and flow</td><td>none (kept locally)</td><td>An in-app "battery usage" screen, support diagnostics, or your own backend</td></tr>
+      </table></div>
+
+      <h3>Read today's usage in the app</h3>
+      <div class="code"><span class="lang">dart</span><pre>ListenableBuilder(
+  listenable: BatteryInsights.instance.debugChanges,  // fires when totals change
+  builder: (context, _) {
+    final today = BatteryInsights.instance.usageToday;
+    if (today == null) return const Text('Collecting…');
+    return Column(children: [
+      Text('Today: ${today.total.drainMah.toStringAsFixed(0)} mAh'),
+      Text('Foreground: ${today.foreground.drainMah.toStringAsFixed(0)} mAh '
+           'over ${today.foreground.duration.inMinutes} min'),
+      Text('Background: ${today.background.drainMah.toStringAsFixed(0)} mAh'),
+      for (final e in today.flows.entries)
+        Text('${e.key}: ${e.value.drainMah.toStringAsFixed(1)} mAh'),
+    ]);
+  },
+)</pre></div>
+      <p class="muted"><code>BatteryInsights.instance.usage</code> has the last 14 days, newest first. Charging time is counted as time but not as drain. Totals come from closed segments, so the segment in progress shows up once it closes.</p>
+
+      <h3>Get every run as a stream</h3>
+      <div class="code"><span class="lang">dart</span><pre>BatteryInsights.instance.reports.listen((r) {
+  // r.kind is BatteryRunKind.flow or BatteryRunKind.session
+  myBackend.post('/battery', r.toParams());
+});</pre></div>
+    </section>
+
+    <section id="dimensions">
+      <h2>Your own dimensions</h2>
+      <p>For state that changes <em>inside</em> a flow, such as the camera, a download, GPS tracking or a video playing, set a dimension where the state really changes:</p>
+      <div class="code"><span class="lang">dart</span><pre>// where the camera controller starts
+BatteryInsights.instance.setDimension('camera', 'preview');
+// where it stops
+BatteryInsights.instance.setDimension('camera', 'off');</pre></div>
+      <p>Every change closes the current segment, so drain is split by camera state within each flow. That's how you tell "the scan flow is expensive" apart from "the camera is". You can set up to <code>maxDimensions</code> at once (4 by default, which keeps Firebase events within 25 parameters). Seed them with an idle value such as <code>'off'</code> at startup so every segment carries them.</p>
+    </section>
+
+    <section id="sampling">
+      <h2>Keeping long stretches sampled</h2>
+      <p>The battery is always read at transitions. To also catch plugging in, screen toggles and long idle stretches, call <code>recordSample()</code> from callbacks your app <em>already</em> runs. It's throttled to one read per <code>minSampleInterval</code> (60 s), so calling it often is harmless.</p>
+      <div class="code"><span class="lang">dart</span><pre>locationStream.listen((position) {
+  BatteryInsights.instance.recordSample();
+  // …your code
+});</pre></div>
+      <div class="callout warn"><p>Don't add a timer just to call <code>recordSample()</code>. Waking the app to measure the battery costs battery. If your app has no periodic work, transitions alone still give correct totals; segments are just longer.</p></div>
+    </section>
+
+    <section id="analytics">
+      <h2>Sending to analytics</h2>
+      <p>The sink receives <code>(eventName, params)</code>. Params are flat <code>String</code>/<code>num</code> maps built within Firebase Analytics' limits (at most 25 params and 40-character names), so they work with any SDK.</p>
+
+      <div class="tabs" role="tablist" data-tabs="sdk">
+        <button role="tab" aria-selected="true" data-tab="firebase">Firebase</button>
+        <button role="tab" aria-selected="false" data-tab="mixpanel">Mixpanel / Amplitude</button>
+        <button role="tab" aria-selected="false" data-tab="own">Own backend</button>
+        <button role="tab" aria-selected="false" data-tab="none">No backend</button>
+      </div>
+      <div class="panel" data-panel="firebase">
+        <div class="code"><span class="lang">dart</span><pre>await BatteryInsights.instance.init(
+  sink: (name, params) =&gt;
+      FirebaseAnalytics.instance.logEvent(name: name, parameters: params),
+  // Rarely-changing facts (capacity, cycles, health) as user properties,
+  // so every event carries them without spending event params.
+  deviceSink: (name, value) =&gt;
+      FirebaseAnalytics.instance.setUserProperty(name: name, value: value),
+);</pre></div>
+      </div>
+      <div class="panel" data-panel="mixpanel" hidden>
+        <div class="code"><span class="lang">dart</span><pre>await BatteryInsights.instance.init(
+  sink: (name, params) =&gt; mixpanel.track(name, properties: params),
+  deviceSink: (name, value) =&gt; mixpanel.getPeople().set(name, value),
+);
+// Amplitude: amplitude.track(BaseEvent(name, eventProperties: params))</pre></div>
+      </div>
+      <div class="panel" data-panel="own" hidden>
+        <div class="code"><span class="lang">dart</span><pre>await BatteryInsights.instance.init(
+  sink: (name, params) =&gt; eventQueue.add({'event': name, ...params}),
+);
+// Batch-upload eventQueue with your existing sync. Don't open a
+// connection per event.</pre></div>
+      </div>
+      <div class="panel" data-panel="none" hidden>
+        <div class="code"><span class="lang">dart</span><pre>await BatteryInsights.instance.init(
+  config: const BatteryInsightsConfig(enabled: true),
+);
+// Use startFlow()/finish(), usage and reports locally.</pre></div>
+      </div>
+    </section>
+
+    <section id="config">
+      <h2>Config &amp; remote rollout</h2>
+      <p>Reporting is <strong>off by default</strong>. Roll it out from remote config: <code>configure()</code> persists the config, so a cold start follows the last known switch before your remote config arrives.</p>
+      <div class="code"><span class="lang">dart</span><pre>// e.g. Firebase Remote Config key "battery_insights":
+// {"enabled": true, "samplePct": 10, "rollAfterS": 900}
+BatteryInsights.instance.configure(BatteryInsightsConfig.fromJson(
+  jsonDecode(remoteConfig.getString('battery_insights')),
+));</pre></div>
+      <div class="table-wrap"><table>
+        <tr><th>Field</th><th>JSON key</th><th>Default</th><th>Meaning</th></tr>
+        <tr><td><code>enabled</code></td><td><code>enabled</code></td><td><code>false</code></td><td>Master switch</td></tr>
+        <tr><td><code>samplePct</code></td><td><code>samplePct</code></td><td><code>100</code></td><td>Share of installs that report. Each install draws a fixed bucket once, so the cohort stays stable across sessions</td></tr>
+        <tr><td><code>rollAfter</code></td><td><code>rollAfterS</code></td><td>15 min</td><td>A segment older than this closes at the next sample</td></tr>
+        <tr><td><code>minSegment</code></td><td><code>minSegmentS</code></td><td>5 s</td><td>Shorter segments, runs and sessions aren't sent</td></tr>
+        <tr><td><code>minSampleInterval</code></td><td><code>minSampleIntervalS</code></td><td>60 s</td><td>Throttle for <code>recordSample()</code></td></tr>
+        <tr><td><code>segmentEvents</code></td><td><code>segmentEvents</code></td><td><code>true</code></td><td>Send <code>battery_segment</code></td></tr>
+        <tr><td><code>flowEvents</code></td><td><code>flowEvents</code></td><td><code>true</code></td><td>Send <code>battery_flow</code></td></tr>
+        <tr><td><code>sessionEvents</code></td><td><code>sessionEvents</code></td><td><code>true</code></td><td>Send <code>battery_session</code></td></tr>
+        <tr><td><code>maxDimensions</code></td><td><code>maxDimensions</code></td><td><code>4</code></td><td>How many host dimensions can be set at once</td></tr>
+      </table></div>
+      <p class="muted">Missing or mistyped JSON keys fall back to their defaults. Every method is safe to call before <code>init</code>, while disabled, and repeatedly, and none of them throws.</p>
+    </section>
+
+    <section id="events">
+      <h2>Event reference</h2>
+      <p>If the device doesn't report a value, it's <strong>left out</strong> rather than sent as 0, so a missing param means "unknown".</p>
+
+      <h3><code>battery_flow</code> and <code>battery_session</code></h3>
+      <div class="table-wrap"><table>
+        <tr><th>Param</th><th>Type</th><th>Meaning</th></tr>
+        <tr><td><code>flow</code> or <code>app_state</code></td><td>string</td><td>Flow name, or <code>fg</code>/<code>bg</code> for a session</td></tr>
+        <tr><td><code>duration_s</code></td><td>int</td><td>Length</td></tr>
+        <tr><td><code>drain_mah</code></td><td>double</td><td>Charge used, from the charge counter (negative if the battery gained charge overall)</td></tr>
+        <tr><td><code>avg_ma</code></td><td>double</td><td><code>drain_mah</code> per hour, for comparing runs of different lengths</td></tr>
+        <tr><td><code>current_ma_avg</code></td><td>double</td><td>Mean instantaneous current</td></tr>
+        <tr><td><code>level_start</code>, <code>level_end</code></td><td>int</td><td>Battery %</td></tr>
+        <tr><td><code>temp_start_c</code>, <code>temp_max_c</code></td><td>double</td><td>Battery temperature, °C</td></tr>
+        <tr><td><code>thermal_status_max</code></td><td>int</td><td>Worst OS thermal status (Android 10+), from 0 (none) to 6 (shutdown)</td></tr>
+        <tr><td><code>charging</code></td><td><code>'1'</code>/<code>'0'</code></td><td>Plugged in at any reading. Leave these rows out of drain analysis</td></tr>
+        <tr><td><code>samples</code></td><td>int</td><td>How many readings the run is built from</td></tr>
+      </table></div>
+
+      <h3><code>battery_segment</code></h3>
+      <div class="table-wrap"><table>
+        <tr><th>Param</th><th>Type</th><th>Meaning</th></tr>
+        <tr><td><code>flow</code></td><td>string</td><td>Innermost open flow, or <code>none</code> outside every flow</td></tr>
+        <tr><td><code>app_state</code></td><td>string</td><td><code>fg</code>, <code>bg</code> or <code>unknown</code></td></tr>
+        <tr><td><code>charging</code>, <code>screen_on</code>, <code>power_save</code></td><td><code>'1'</code>/<code>'0'</code></td><td>Plugged in, screen interactive, battery saver on</td></tr>
+        <tr><td><code>brightness</code></td><td>string</td><td><code>auto</code>, or the manual backlight level: <code>low</code>, <code>mid</code> or <code>high</code></td></tr>
+        <tr><td><code>network</code></td><td>string</td><td><code>wifi</code>, <code>cell</code>, <code>ethernet</code>, <code>other</code> or <code>none</code></td></tr>
+        <tr><td><em>your dimensions</em></td><td>string</td><td>From <code>setDimension</code></td></tr>
+        <tr><td><code>duration_s</code>, <code>level_start</code>, <code>level_end</code></td><td>int</td><td>Length and battery %</td></tr>
+        <tr><td><code>drain_mah</code>, <code>avg_ma</code>, <code>current_ma_avg</code></td><td>double</td><td>As above</td></tr>
+        <tr><td><code>temp_start_c</code>, <code>temp_max_c</code></td><td>double</td><td>Battery temperature</td></tr>
+        <tr><td><code>thermal_status_max</code>, <code>thermal_headroom_max</code></td><td>int, double</td><td>OS thermal state. Headroom (Android 11+) reaches 1.0 when severe throttling starts</td></tr>
+        <tr><td><code>est_capacity_mah</code></td><td>int</td><td>Estimated full-charge capacity</td></tr>
+        <tr><td><code>end_reason</code></td><td>string</td><td>What closed it: the dimension that changed, or <code>roll</code>, <code>start</code> or <code>process_death</code></td></tr>
+        <tr><td><code>end_lag_s</code></td><td>int</td><td>Only after a process death: seconds between the segment's end and when it was logged</td></tr>
+      </table></div>
+
+      <h3>Device properties (<code>deviceSink</code>)</h3>
+      <div class="table-wrap"><table>
+        <tr><th>Property</th><th>Meaning</th><th>Availability</th></tr>
+        <tr><td><code>battery_capacity_mah</code></td><td>Full-charge capacity today (stable median, rounded to 50 mAh)</td><td>Devices with a charge counter</td></tr>
+        <tr><td><code>battery_design_mah</code></td><td>Factory-rated capacity</td><td>Most devices</td></tr>
+        <tr><td><code>battery_cycle_count</code></td><td>Charge cycles</td><td>Android 14+</td></tr>
+        <tr><td><code>battery_health</code></td><td><code>good</code>, <code>overheat</code>, <code>dead</code>, <code>over_voltage</code>, <code>failure</code> or <code>cold</code></td><td>All</td></tr>
+      </table></div>
+    </section>
+
+    <section id="bigquery">
+      <h2>BigQuery &amp; dashboards</h2>
+      <p>If Firebase's BigQuery export is on, the <a href="https://github.com/aashish-dhiman/battery_insights/blob/main/doc/bigquery.md">BigQuery analysis guide</a> covers a curated, partitioned segment table with a daily refresh, correct time-weighted metrics, quality filters, and ready-made queries for flows, sessions, heat, battery health and charging.</p>
+      <div class="callout"><p><strong>Always time-weight.</strong> Use <code>SUM(drain_mah) / SUM(duration_s / 3600)</code> and never <code>AVG(avg_ma)</code>. A plain average gives a 10-second segment the same weight as a 2-hour one.</p></div>
+    </section>
+
+    <section id="debug">
+      <h2>Debug tools</h2>
+      <p>These are meant for development builds, and you decide where they can be reached from.</p>
+      <div class="code"><span class="lang">dart</span><pre>// A full debug screen: status, live reading, heat, today's usage, recent
+// flow runs and sessions, the open segment, and every event sent or dropped.
+Scaffold(
+  appBar: AppBar(title: const Text('Battery')),
+  body: const BatteryInsightsDebugView(),
+);
+
+// A draggable floating HUD (level · mA · °C · flow) over the whole app,
+// toggled from the debug view or with setOverlayEnabled(true).
+MaterialApp(
+  builder: (context, child) =&gt; BatteryInsightsOverlay(child: child!),
+);</pre></div>
+      <p class="muted">Both refresh every 5 s while they're visible. Those reads are display-only and never change what gets reported.</p>
+    </section>
+
+    <section id="how">
+      <h2>How it works, and why it adds no drain</h2>
+      <ul>
+        <li><strong>No timers, wake locks, alarms or battery receivers.</strong> The Android side reads the sticky <code>ACTION_BATTERY_CHANGED</code> intent that the OS already caches, plus a few <code>BatteryManager</code> and <code>PowerManager</code> properties. Each is a single binder call.</li>
+        <li><strong>It only reads while the app is awake anyway</strong>: at a state transition, or when you call <code>recordSample()</code> from work that's already running.</li>
+        <li><strong>It measures the charge counter, not the percentage.</strong> The fuel gauge's µAh counter is far finer than battery %, so even a two-minute flow has a measurable cost.</li>
+        <li><strong>Attribution happens on the device.</strong> Each event already holds the drain for exactly one state, so your warehouse only has to add them up.</li>
+        <li><strong>It survives process death.</strong> The open segment is persisted and reported at the next launch with <code>end_reason = process_death</code>.</li>
+      </ul>
+    </section>
+
+    <section id="limits">
+      <h2>Accuracy &amp; limits</h2>
+      <ul>
+        <li><strong>Test on a real device.</strong> Emulators report a fake battery.</li>
+        <li><strong>Coarse gauges.</strong> Some phones only step the charge counter in increments of about 1 %. On those a short visit can read 0 mAh, but totals across many visits are still correct.</li>
+        <li><strong>No charge counter.</strong> A few devices report battery % only, so <code>drain_mah</code> is missing there. Filter on it.</li>
+        <li><strong>System activities.</strong> When a flow hands off to the system camera or a file picker, your app goes to the background. That time counts as <code>app_state = bg</code> within the flow.</li>
+        <li><strong>Thermal.</strong> Apps can't read CPU or skin temperature. Thermal status and headroom need a thermal HAL, which some devices don't have. Battery temperature is always available.</li>
+        <li><strong>Platforms.</strong> Only Android is supported. On iOS, web and desktop every call is a safe no-op, so shared code runs unchanged. iOS only exposes battery % in 1–5 % steps, which is too coarse for per-flow numbers.</li>
+      </ul>
+    </section>
+
+    <section id="checklist">
+      <h2>Integration checklist</h2>
+      <div class="table-wrap"><table>
+        <tr><th></th><th>Step</th></tr>
+        <tr><td>☐</td><td><code>init()</code> in <code>main()</code>, with a sink and optionally a <code>deviceSink</code></td></tr>
+        <tr><td>☐</td><td>Reporting enabled, from remote config with a small <code>samplePct</code> at first</td></tr>
+        <tr><td>☐</td><td>Main flows mapped with the route observer; tabs and sheets wrapped in <code>BatteryFlowScope</code></td></tr>
+        <tr><td>☐</td><td>Costly features (camera, GPS, playback) set as dimensions, seeded with an idle value</td></tr>
+        <tr><td>☐</td><td><code>recordSample()</code> called from existing periodic callbacks, if any</td></tr>
+        <tr><td>☐</td><td>Debug view reachable from a dev menu; flows and events checked on a real phone</td></tr>
+        <tr><td>☐</td><td>Dashboards built with time-weighted metrics, with charging rows filtered out</td></tr>
+      </table></div>
+    </section>
+
+    <footer>
+      <p>battery_insights is MIT-licensed. <a href="https://github.com/aashish-dhiman/battery_insights">Source on GitHub</a> · <a href="https://pub.dev/packages/battery_insights">pub.dev</a> · <a href="https://github.com/aashish-dhiman/battery_insights/issues">Report an issue</a></p>
+    </footer>
+  </main>
+</div>
+
+<script>
+  // Theme toggle (remembered per browser).
+  (function () {
+    const root = document.documentElement;
+    try { const t = localStorage.getItem('bi-theme'); if (t) root.dataset.theme = t; } catch (e) {}
+    document.getElementById('theme').addEventListener('click', () => {
+      const dark = root.dataset.theme
+        ? root.dataset.theme === 'dark'
+        : matchMedia('(prefers-color-scheme: dark)').matches;
+      root.dataset.theme = dark ? 'light' : 'dark';
+      try { localStorage.setItem('bi-theme', root.dataset.theme); } catch (e) {}
+    });
+  })();
+
+  // Mobile menu.
+  const side = document.getElementById('side');
+  document.getElementById('menu').addEventListener('click', () => side.classList.toggle('open'));
+  side.addEventListener('click', e => { if (e.target.tagName === 'A') side.classList.remove('open'); });
+
+  // Tabs.
+  document.querySelectorAll('[data-tabs]').forEach(list => {
+    const panels = [];
+    let el = list.nextElementSibling;
+    while (el && el.classList.contains('panel')) { panels.push(el); el = el.nextElementSibling; }
+    list.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+      list.querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', b === btn));
+      panels.forEach(p => p.hidden = p.dataset.panel !== btn.dataset.tab);
+    }));
+  });
+
+  // Light Dart highlighting, then copy buttons.
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const TOKENS = /(\/\/[^\n]*)|('[^'\n]*')|\b(final|const|await|async|return|if|else|for|in|void|import|switch|null|true|false|class|new|var)\b|\b([A-Z][A-Za-z0-9]+)\b|\b(\d+(?:\.\d+)?)\b/g;
+  document.querySelectorAll('pre').forEach(pre => {
+    const raw = pre.textContent;
+    if (pre.dataset.lang !== 'sh') {
+      let out = '', last = 0;
+      raw.replace(TOKENS, (m, c, s, k, t, n, off) => {
+        const cls = c ? 'tok-c' : s ? 'tok-s' : k ? 'tok-k' : t ? 'tok-t' : 'tok-n';
+        out += esc(raw.slice(last, off)) + `<span class="${cls}">${esc(m)}</span>`;
+        last = off + m.length;
+        return m;
+      });
+      pre.innerHTML = out + esc(raw.slice(last));
+    }
+    const wrap = pre.parentElement;
+    if (wrap.classList.contains('code')) {
+      const b = document.createElement('button');
+      b.className = 'copy'; b.textContent = 'Copy'; b.dataset.copy = raw;
+      wrap.appendChild(b);
+    }
+  });
+  document.addEventListener('click', e => {
+    const b = e.target.closest('.copy');
+    if (!b) return;
+    navigator.clipboard.writeText(b.dataset.copy).then(() => {
+      b.textContent = 'Copied'; setTimeout(() => b.textContent = 'Copy', 1400);
+    });
+  });
+
+  // Highlight the section in view.
+  const links = [...document.querySelectorAll('aside.side a')];
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(en => {
+      if (!en.isIntersecting) return;
+      links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + en.target.id));
+    });
+  }, { rootMargin: '-40% 0px -55% 0px' });
+  document.querySelectorAll('section[id], main#top').forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
